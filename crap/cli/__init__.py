@@ -4,10 +4,10 @@ import click
 import injections
 import trafaret as t
 
-from motor.motor_asyncio import AsyncIOMotorClient
 from yaml import load
 
 from crap.db import Storage
+from crap.logs import logger
 from crap.twi.spyder import Spyder
 from crap.twi.client import Client
 
@@ -35,10 +35,13 @@ def main(config):
     inj = injections.Container()
 
     inj['twitter'] = Client(conf_data['twitter'])
+    logger.debug("Created twitter client")
     inj['storage'] = Storage(conf_data['mongo'])
+    logger.debug("Created storage")
     twi_spyder = inj.inject(Spyder())
+    logger.debug("Created spyder")
 
-    loop.run_until_complete(twi_spyder.store_twitts())
+    loop.run_until_complete(twi_spyder.get_twitts())
 
 if __name__ == '__main__':
     main()
