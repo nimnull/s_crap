@@ -51,7 +51,8 @@ class Client:
     trafaret = t.Dict({
         'api_key': t.String,
         'api_secret': t.String,
-        'url': t.URL
+        'url': t.URL,
+        'delay': t.Int,
     }).ignore_extra('*')
 
     auth_resp = t.Dict({
@@ -80,7 +81,7 @@ class Client:
     @limit_rate_by('_rate_limit', '_rate_limit_reset')
     async def search(self, q=None, result_type='recent', params=None):
         assert result_type in self.result_types
-        await self.ensure_authenticated()
+        await self.__ensure_authenticated()
 
         url = urljoin(self.base_url, self.search_uri)
         default_params = {'q': q, 'lang': 'en', 'result_type': result_type, 'count': self.default_count,
@@ -88,8 +89,6 @@ class Client:
 
         if params is not None:
             default_params.update(params)
-
-        print("Max id: %s" % default_params.get('max_id'))
 
         resp = await self.session.get(url, params=default_params, headers=self.auth_headers)
         assert resp.status == http.HTTPStatus.OK, str(http.HTTPStatus.OK) + await resp.text()
@@ -101,10 +100,9 @@ class Client:
         content = await resp.json()
         return content
 
-    async def ensure_authenticated(self):
+    async def __ensure_authenticated(self):
         if self.auth_headers is None:
             await self.auth()
-
 
     def __del__(self):
         self.session.close()
