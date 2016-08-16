@@ -1,9 +1,9 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from crap.logs import logger
-
 
 class Storage:
+    db = None
+    mongo_client = None
 
     def __init__(self, mongo_uri):
         self.mongo_client = AsyncIOMotorClient(mongo_uri)
