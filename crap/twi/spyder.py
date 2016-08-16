@@ -1,5 +1,6 @@
 from urllib.parse import parse_qs
 
+import asyncio
 import injections
 
 from crap.db import Storage
@@ -18,54 +19,52 @@ def flatten_params(params):
 class Spyder:
     storage = injections.depends(Storage)
     twitter = injections.depends(Client)
+    config = injections.depends(dict)
 
     async def get_twitts(self, params=None):
 
-        rv = await self.twitter.search('python', params=params)
+        while True:
+            rv = await self.twitter.search('python', params=params)
 
-        statuses, metadata, max_id = self._parse_response(rv)
-        logger.debug("Max id: %s" % max_id)
-        # while max_id != history_arg['max_id']:
-        #     statuses, max_id, history_arg = self._parse_response(rv)
-        #     print("History: %s" % rv['search_metadata'])
-        # await self.store_twitts(statuses)
-        logger.debug("Meta: %s" % metadata)
+            statuses, metadata = self._parse_response(rv)
+            self.store_twitts(statuses)
 
-        refresh_args = flatten_params(
-            parse_qs(metadata['refresh_url'].strip('?'))
-        )
-        history_args = flatten_params(
-            parse_qs(metadata['next_results'].strip('?'))
-        )
+            logger.debug("Max id: %s" % metadata['max_id'])
+            logger.debug("Meta: %s" % metadata)
 
-        await self.dig_twitts_history(history_args)
+            refresh_args = flatten_params(
+                parse_qs(metadata['refresh_url'].strip('?'))
+            )
+            next_results = metadata.get('next_results')
 
+            if next_results:
+                history_args = flatten_params(
+                    parse_qs(next_results.strip('?'))
+                )
+                await self.dig_twitts_history(history_args)
 
-        # await self.refresh_twitts(refresh_args)
-        # await self.dig_twitts_history(history_arg)
+            params = refresh_args
+            await asyncio.sleep(self.config['twitter']['delay'])
 
     def _parse_response(self, response):
         statuses = response['statuses']
         metadata = response['search_metadata']
-        max_id = metadata['max_id']
-        return statuses, metadata, max_id
-
-    async def refresh_twitts(self, params):
-        rv = await self.twitter.search(params=params)
-        metadata = rv['search_metadata']
+        return statuses, metadata
 
     async def dig_twitts_history(self, query):
         call_next = query is not None
 
         while call_next:
             rv = await self.twitter.search(params=query)
-            statuses, metadata, max_id = self._parse_response(rv)
-            logger.debug("History meta: %s" % rv)
-
+            statuses, metadata = self._parse_response(rv)
+            await self.store_twitts(statuses)
+            logger.debug("History meta: %s" % metadata)
             call_next = metadata.get('next_results')
             query = call_next and flatten_params(
-                parse_qs(metadata['next_results'].strip('?'))
+                parse_qs(call_next.strip('?'))
             ) or None
 
     async def store_twitts(self, statuses):
-        self.storage.update('twitter_raw', statuses)
+        for st in statuses:
+            await self.storage.update('twitter_raw',
+                                      {'id': st['id']}, st, {'upsert': True})
