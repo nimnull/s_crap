@@ -2,4 +2,5 @@ twitter:
   url: https://api.twitter.com
   api_key: change me
   api_secret: change me
-mongo: mongodb://localhost:27017
+  delay: 30
+mongo: mongodb://localhost:27017/scrap
