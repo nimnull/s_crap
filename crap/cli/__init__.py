@@ -37,6 +37,7 @@ def main(config):
     inj['twitter'] = Client(conf_data['twitter'])
     logger.debug("Created twitter client")
     inj['storage'] = Storage(conf_data['mongo'])
+    inj['config'] = conf_data
     logger.debug("Created storage")
     twi_spyder = inj.inject(Spyder())
     logger.debug("Created spyder")
