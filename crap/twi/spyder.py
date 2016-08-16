@@ -27,7 +27,7 @@ class Spyder:
             rv = await self.twitter.search('python', params=params)
 
             statuses, metadata = self._parse_response(rv)
-            self.store_twitts(statuses)
+            await self.store_twitts(statuses)
 
             logger.debug("Max id: %s" % metadata['max_id'])
             logger.debug("Meta: %s" % metadata)
@@ -65,6 +65,7 @@ class Spyder:
             ) or None
 
     async def store_twitts(self, statuses):
+        logger.debug("Stored: %s", len(statuses))
         for st in statuses:
             await self.storage.update('twitter_raw',
                                       {'id': st['id']}, st, {'upsert': True})
