@@ -36,7 +36,7 @@ release_requires = [
     'zest.releaser>=6.6.2,<7']
 
 entry_points = {
-    'console_scripts': ['spyder=crap.cli:run_spyder']}
+    'console_scripts': ['spyder=crap.cli:main']}
 
 # scripts = ['bin/drlayout-complete']
 

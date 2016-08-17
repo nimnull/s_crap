@@ -23,7 +23,7 @@ class Spyder:
     config = injections.depends(dict)
     twitter_raw = 'twitter_raw'
 
-    def __init__(self):
+    def __injected__(self):
         self.storage.db[self.twitter_raw].create_index(
             [('id', pymongo.ASCENDING)], background=True, unique=True
         )
@@ -39,14 +39,9 @@ class Spyder:
             logger.debug("Max id: %s" % metadata['max_id'])
             logger.debug("Meta: %s" % metadata)
 
-            next_results = self.__get_next_query(metadata)
+            await self.dig_twitts_history(metadata)
 
-            if next_results:
-                await self.dig_twitts_history(next_results)
-
-            params = flatten_params(
-                parse_qs(metadata['refresh_url'].strip('?'))
-            )
+            params = self.__get_params(metadata, 'refresh_url')
             await asyncio.sleep(self.config['twitter']['delay'])
 
     def _parse_response(self, response):
@@ -54,8 +49,8 @@ class Spyder:
         metadata = response['search_metadata']
         return statuses, metadata
 
-    def __get_next_query(self, metadata):
-        next_results = metadata.get('next_results')
+    def __get_params(self, metadata, key):
+        next_results = metadata.get(key)
 
         query = next_results and flatten_params(
             parse_qs(next_results.strip('?'))
@@ -63,16 +58,14 @@ class Spyder:
 
         return query
 
-    async def dig_twitts_history(self, query):
-        call_next = query is not None
+    async def dig_twitts_history(self, metadata):
 
-        while call_next:
-            rv = await self.twitter.search(params=query)
+        while 'next_results' in metadata:
+            logger.debug("History meta: %s" % metadata)
+            params = self.__get_params(metadata, 'next_results')
+            rv = await self.twitter.search(params=params)
             statuses, metadata = self._parse_response(rv)
             await self.store_twitts(statuses)
-            logger.debug("History meta: %s" % metadata)
-            call_next = metadata.get('next_results')
-            query = self.__get_next_query(metadata)
 
     async def store_twitts(self, statuses):
         logger.debug("Stored: %s", len(statuses))
