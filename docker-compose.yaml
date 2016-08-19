@@ -1,0 +1,9 @@
+mongo:
+  container_name: mongodb
+  image: mongo:3
+  volumes:
+    - ./data/mongo:/data/db
+  ports:
+    - 27017:27017
+  mem_limit: 1g
+  restart: always
