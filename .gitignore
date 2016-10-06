@@ -1,4 +1,8 @@
-# Created by .ignore support plugin (hsz.mobi)
+
+data
+config.yaml
+
+
 ### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -89,6 +93,7 @@ ENV/
 
 # Rope project settings
 .ropeproject
+<<<<<<< HEAD
 ### OSX template
 *.DS_Store
 .AppleDouble
@@ -169,3 +174,5 @@ compose.yaml
 config.yaml
 crap.egg-info/
 data/
+=======
+>>>>>>> 06f883905ff4c8e316ed73f3e739c5ca65d5fde5
