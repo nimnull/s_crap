@@ -8,8 +8,8 @@ from yaml import load
 
 from crap.db import Storage
 from crap.logs import logger
-from crap.twi.spyder import Spyder
-from crap.twi.client import Client
+# from crap.twi.spyder import Spyder
+# from crap.twi.client import Client
 
 try:
     from yaml import CLoader as Loader
@@ -34,12 +34,12 @@ def main(config):
 
     inj = injections.Container()
 
-    inj['twitter'] = Client(conf_data['twitter'])
+    # inj['twitter'] = Client(conf_data['twitter'])
     logger.debug("Created twitter client")
     inj['storage'] = Storage(conf_data['mongo'])
     inj['config'] = conf_data
     logger.debug("Created storage")
-    twi_spyder = inj.inject(Spyder())
+    # twi_spyder = inj.inject(Spyder())
     logger.debug("Created spyder")
 
     loop.run_until_complete(twi_spyder.get_twitts())

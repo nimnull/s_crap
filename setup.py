@@ -5,6 +5,7 @@ from setuptools import setup
 
 __author__ = 'Yehor Nazarkin <nimnull@gmail.com>'
 
+
 def readme():
     """Open and return readme."""
     with open('README.rst') as f:
