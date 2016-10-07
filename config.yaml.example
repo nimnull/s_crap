@@ -1,6 +1,13 @@
 twitter:
   url: https://api.twitter.com
+  stream: https://stream.twitter.com
+  # consumer key
   api_key: change me
+  # consumer secret
   api_secret: change me
+  # oauth token
+  access_token: change me
+  # oauth token secret
+  access_secret: change me
   delay: 30
 mongo: mongodb://localhost:27017/scrap
