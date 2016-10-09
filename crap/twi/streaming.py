@@ -1,18 +1,24 @@
+import asyncio
 import base64
 import hmac
+import json
 import logging
-from hashlib import sha1
-from random import random
-from urllib.parse import quote, urlsplit, urlunsplit
-
 import time
+from hashlib import sha1
+from pprint import pprint
+from random import random
+from urllib.parse import quote, urlsplit, urlunsplit, urljoin, urlencode
+
+import oauthlib.oauth1 as oauth
+import trafaret as t
+from aiohttp import ClientSession
 
 logger = logging.getLogger(__name__)
 
 
-class Signature(object):
-    """Abstract base class for signature methods."""
-    name = None
+class HmacSha1Signature:
+    """HMAC-SHA1 signature-method."""
+    name = 'HMAC-SHA1'
 
     @staticmethod
     def _escape(s):
@@ -27,19 +33,11 @@ class Signature(object):
 
         return urlunsplit((scheme, netloc, path, '', fragment))
 
-    def sign(self, method, url, consumer_secret, oauth_token_secret=None, **params):
-        """Abstract method."""
-        raise NotImplementedError('Should not be called.')
-
-
-class HmacSha1Signature(Signature):
-    """HMAC-SHA1 signature-method."""
-    name = 'HMAC-SHA1'
-
     def sign(self, consumer_secret, method, url, oauth_token_secret=None, **params):
         """Create a signature using HMAC-SHA1."""
         params = "&".join("%s=%s" % (k, quote(str(value), '~'))
                           for k, value in sorted(params.items()))
+        logger.debug("params: %s" % params)
         method = method.upper()
         url = self._remove_qs(url)
 
@@ -53,23 +51,53 @@ class HmacSha1Signature(Signature):
         return base64.b64encode(hashed.digest()).decode()
 
 
-def prepare_request(consumer_key, consumer_secret, oauth_token, oauth_token_secret, url, method, params):
-    """Make a request to provider."""
-    signature = HmacSha1Signature()
-    oparams = {
-        'oauth_consumer_key': consumer_key,
-        'oauth_nonce': sha1(str(random()).encode('ascii')).hexdigest(),
-        'oauth_signature_method': signature.name,
-        'oauth_timestamp': int(time.time()),
-        'oauth_version': '1.0',
-    }
-    oparams.update(params or {})
+class StreamingClient:
+    filter_endpoint = "/1.1/statuses/filter.json"
+    sample_endpoint = "/1.1/statuses/sample.json"
+    predicates = ["follow", "locations", "track"]
+    keys = ['language', 'delimited', 'stall_warnings']
+    trafaret = t.Dict({
+        'api_key': t.String,
+        'api_secret': t.String,
+        'access_token': t.String,
+        'access_secret': t.String,
+        'stream': t.URL,
+    }).ignore_extra('*')
 
-    if oauth_token:
-        oparams['oauth_token'] = oauth_token
+    def __init__(self, config):
+        config = self.trafaret.check(config)
+        self.base_url = config['stream']
+        self.signature = HmacSha1Signature()
+        self.session = ClientSession()
+        self.oauth_client = oauth.Client(
+            client_key=config['api_key'],
+            client_secret=config['api_secret'],
+            resource_owner_key=config['access_token'],
+            resource_owner_secret=config['access_secret']
+        )
 
-    oparams['oauth_signature'] = signature.sign(
-        method, url, consumer_secret, oauth_token_secret, **oparams
-    )
-    logger.debug("%s %s", url, oparams)
-    return method, url, oparams
+    async def request(self, method, endpoint, params=None, headers=None):
+        url = urljoin(self.base_url, endpoint)
+        headers = (headers or {})
+        if method == 'POST':
+            headers['Content-type'] = 'application/x-www-form-urlencoded'
+        uri, signed_headers, body = self.oauth_client.sign(url, method, params, headers)
+        logger.debug("PREPARED: %s %s %s", uri, signed_headers, body)
+        resp = await self.session.request(method, uri, params=body, headers=signed_headers)
+        return resp
+
+    async def stream(self, queue, predicate, value, **kwargs):
+        params = dict(((predicate, value,),))
+        while True:
+            resp = await self.request('POST', self.filter_endpoint, params)
+            while True:
+                data = await resp.content.readline()
+                message = data.strip()
+                if message != b'':
+                    message = json.loads(message.decode('utf-8'))
+                    logger.debug("Got something %s", message['id'])
+                    await queue.put(message)
+            await asyncio.sleep(10)
+
+    def __del__(self):
+        asyncio.ensure_future(self.session.close())

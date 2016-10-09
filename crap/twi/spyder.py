@@ -6,6 +6,8 @@ import pymongo
 
 from crap.db import Storage
 from crap.logs import logger
+from crap.twi.streaming import StreamingClient
+
 from .client import Client
 
 
@@ -16,11 +18,9 @@ def flatten_params(params):
     return query
 
 
-@injections.has
-class Spyder:
+class BaseSpyder:
     storage = injections.depends(Storage)
-    twitter = injections.depends(Client)
-    config = injections.depends(dict)
+    client = None
     twitter_raw = 'twitter_raw'
 
     def __injected__(self):
@@ -28,10 +28,25 @@ class Spyder:
             [('id', pymongo.ASCENDING)], background=True, unique=True
         )
 
+        if self.client is None:
+            raise NotImplementedError('Should have twitter client class specified')
+
+    async def store_twitts(self, statuses):
+        logger.debug("Stored: %s", len(statuses))
+        for st in statuses:
+            await self.storage.update(self.twitter_raw,
+                                      {'id': st['id']}, st, {'upsert': True})
+
+
+@injections.has
+class Spyder(BaseSpyder):
+    client = injections.depends(Client)
+    config = injections.depends(dict)
+
     async def get_twitts(self, params=None):
 
         while True:
-            rv = await self.twitter.search('python', params=params)
+            rv = await self.client.search('python', params=params)
 
             statuses, metadata = self._parse_response(rv)
             await self.store_twitts(statuses)
@@ -67,8 +82,18 @@ class Spyder:
             statuses, metadata = self._parse_response(rv)
             await self.store_twitts(statuses)
 
-    async def store_twitts(self, statuses):
-        logger.debug("Stored: %s", len(statuses))
-        for st in statuses:
-            await self.storage.update(self.twitter_raw,
-                                      {'id': st['id']}, st, {'upsert': True})
+
+@injections.has
+class StreamingSpyder(BaseSpyder):
+    client = injections.depends(StreamingClient)
+    config = injections.depends(dict)
+
+    def __init__(self):
+        self.queue = asyncio.Queue(maxsize=10)
+
+    async def get_twitts(self):
+        asyncio.ensure_future(self.client.stream(self.queue, predicate='track', value='python'))
+
+        while True:
+            item = await self.queue.get()
+            print(item)
